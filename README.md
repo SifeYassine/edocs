@@ -1,100 +1,114 @@
-# Installation Guide
+# eDocs API
 
-## Prerequisites
+The **Laravel 11 REST API** for **eDocs**, a document management system. Users upload, categorize, and manage their documents (PDF, Office files, images, videos, and more), while administrators manage users, roles, and fine-grained permissions. Authentication uses **Laravel Sanctum**.
 
-Before you begin, ensure you have met the following requirements:
+> Frontend: [edocs-frontend](https://github.com/SifeYassine/edocs-frontend) · Full-stack monorepo: [edocs-fullstack](https://github.com/SifeYassine/edocs-fullstack)
 
--   [Composer](https://getcomposer.org/download/) installed on your machine
--   [Node.js and npm](https://nodejs.org/) installed on your machine
+## Features
 
-## Cloning the Repository
+- **Sanctum token authentication**: register, login, logout
+- **Automatic role bootstrap**: on the first sign-up, `Admin` and `User` roles are created and the first user becomes `Admin`
+- **Permission-based access control** via a custom `PermissionMiddleware`:
+  - `Admin` users bypass all checks
+  - Other users need a specific permission (`Manage Roles`, `Manage Permissions`, `Manage Users`)
+  - Permissions are assigned to and revoked from individual users
+- **Documents**: upload (max 10 MB), rename, re-categorize, and delete
+  - Allowed types: `pdf`, `docx`, `xlsx`, `pptx`, `txt`, `png`, `jpg`, `jpeg`, `mp4`
+  - Stored on the `public` disk under `documents/`
+- **Categories** per user (deleting a category keeps its documents, uncategorized)
+- **Profile**: view and edit your own profile
+- **Auto-generated API docs** via [laravel-request-docs](https://github.com/rakutentech/laravel-request-docs)
 
-1. **Open your terminal.**
-2. **Navigate to the directory where you want to clone the repository:**
+## Tech Stack
 
-    ```bash
-    cd path/to/your/directory
-    ```
+- PHP 8.2+, Laravel 11
+- Laravel Sanctum
+- MySQL (or SQLite)
+- rakutentech/laravel-request-docs
 
-3. **Run the following command to clone the repository:**
+## Data Model
 
-    ```bash
-    git clone https://github.com/SifeYassine/GeStock.git
-    ```
+| Table             | Key fields |
+| ----------------- | ---------- |
+| `users`           | `username`, `email`, `password`, `role_id` |
+| `roles`           | `name`, `description` |
+| `permissions`     | `label`, `description` |
+| `permission_user` | `permission_id`, `user_id` |
+| `categories`      | `name`, `user_id` |
+| `documents`       | `title`, `format`, `path_url`, `category_id`, `user_id` |
 
-## Installing Dependencies
+## Getting Started
 
-1. **Install PHP dependencies using Composer:**
+### Prerequisites
 
-    ```bash
-    composer install
-    ```
+- PHP 8.2+ and [Composer](https://getcomposer.org/)
+- [Node.js](https://nodejs.org/) and npm
+- MySQL (or SQLite)
 
-2. **Install JavaScript dependencies using npm:**
+### Installation
 
-    ```bash
-    npm install
-    ```
+```bash
+git clone https://github.com/SifeYassine/edocs.git
+cd edocs
 
-3. **Build the project:**
+composer install
+npm install && npm run build
 
-    ```bash
-     npm run build
-    ```
+cp .env.example .env
+php artisan key:generate
+```
 
-## Setting Up Environment Variables
+### Configure the database
 
-1. **Open the `.env` file in a text editor and set up your database and other environment variables as needed:**
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=edocs
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-    ```env
-    APP_NAME=Laravel
-    APP_ENV=local
-    APP_KEY=base64:...
-    APP_DEBUG=true
-    APP_URL=http://localhost
+### Migrate and link storage
 
-    LOG_CHANNEL=stack
-    LOG_DEPRECATIONS_CHANNEL=null
-    LOG_LEVEL=debug
+```bash
+php artisan migrate
+php artisan storage:link   # makes uploaded documents publicly accessible
+```
 
-    DB_CONNECTION=mysql
-    DB_HOST=127.0.0.1
-    DB_PORT=3306
-    DB_DATABASE=your_database
-    DB_USERNAME=your_username
-    DB_PASSWORD=your_password...
-    ```
+### Run
 
-## Generating Application Key
+```bash
+php artisan serve
+```
 
-1. **Generate the application key:**
+- API base URL: `http://127.0.0.1:8000/api`
+- API docs: `http://127.0.0.1:8000/request-docs`
 
-    ```bash
-    php artisan key:generate
-    ```
+### Granting permissions
 
-## Running Migrations and Seeders
+Register the first account (it becomes `Admin`). As Admin, create the permissions your team needs, using the exact labels `Manage Roles`, `Manage Permissions`, and `Manage Users`, and assign them to users with:
 
-1. **Run the database migrations:**
+```
+POST /api/users/{userId}/permissions/{permissionId}/assign
+```
 
-    ```bash
-    php artisan migrate
-    ```
+## API Overview
 
-## Serving the Application
+All routes are prefixed with `/api`. Except for `register` and `login`, send `Authorization: Bearer <token>`.
 
-1. **Serve the application locally:**
+| Group | Endpoints | Required permission |
+| ----- | --------- | ------------------- |
+| Auth | `POST auth/register`, `POST auth/login`, `POST auth/logout` | none |
+| Roles | `POST roles/create`, `GET roles/index`, `PUT roles/update/{id}`, `DELETE roles/delete/{id}` | `Manage Roles` |
+| Permissions | `POST permissions/create`, `GET permissions/index`, `PUT permissions/update/{id}`, `DELETE permissions/delete/{id}` | `Manage Permissions` |
+| User permissions | `POST users/{userId}/permissions/{permissionId}/assign`, `DELETE …/revoke` | `Manage Permissions` |
+| | `GET users/{userId}/permissions/index` | authenticated |
+| Users | `GET users/index`, `PUT users/update/{id}`, `DELETE users/delete/{id}` | `Manage Users` |
+| Profile | `GET users/get_profile`, `PUT users/edit_profile` | authenticated |
+| Categories | `POST categories/create`, `GET categories/index`, `PUT categories/update/{id}`, `DELETE categories/delete/{id}` | authenticated |
+| Documents | `POST documents/create` (multipart: `path_url` file, optional `title`, `category_id`), `GET documents/index`, `PUT documents/update/{id}`, `DELETE documents/delete/{id}` | authenticated |
 
-    ```bash
-    php artisan serve
-    ```
+## Author
 
-2. **Open your browser and navigate to the following URL:**
-
-    ```
-    http://127.0.0.1:8000
-    ```
-
-If you encounter any issues, please refer to the [Laravel Documentation](https://laravel.com/docs) or open an issue in the repository.
-
-Happy coding!
+**Sifeddine Yassine** · [@SifeYassine](https://github.com/SifeYassine)
